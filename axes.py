@@ -39,7 +39,7 @@ class AxisFileGroup:
         self.input = DotDict({})
         self.input.fname = None
         self.input.dat = None
-        self.input.index = 0
+        self.input.index = 1
         self.input.T_sensor = None  # from input file
         self.input.T_threshold = None  # from input file
 
@@ -79,7 +79,7 @@ class AxisFileGroup:
         self.input.clear()
         self.input.dat = rows
         self.input.update(dic)
-        self.input.index = 0
+        self.input.index = 1
         self.input.fname = fname
         self.tryAddRowToTable()
 
@@ -88,9 +88,10 @@ class AxisFileGroup:
             f.write('#GPIBM_I '+f'{{"T_sensor": "{self.input.T_sensor}", '+
                      f'"T_threshold": {self.input.T_threshold} }}\n')
             f.write('\t'.join(self.input.dat[0].keys())+'\n')
-            f.write('\n'.join(
-                ['\t'.join(map(str, a.values())) for a in self.input.dat]))
-            f.write('\n')
+            for i, l in enumerate(self.input.dat):
+                if float('nan') in (vs:=l.values()) and i > 0:
+                    break
+                f.write('\t'.join(map(str, vs))+'\n') 
         self.input_fname = fname
 
         
@@ -103,13 +104,6 @@ class AxisFileGroup:
         
     def openOutputFile(self):
         self.closeOutputFile()
-        if not self.file_path_prefix:
-            printE('Please enter a file path prefix')
-        if not self.file_user:
-            printE('Please enter a user')
-        if not self.file_sample:
-            printE('Please enter a sample ID')
-        self.file_counter += 1
         path = (Path(self.file_path_prefix) / self.file_user /
                 self.file_sample /
                 f'{self.file_sample}-{self.date_start}_{self.file_counter:2d}.txt'

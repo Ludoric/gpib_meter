@@ -36,7 +36,8 @@ class Meter:
         self.collectD_thread.daemon = True
 
 
-        self.axes = AxisFileGroup('/home/ludoric/Documents/PhD_stuff/GPIB_meter')
+        self.axes = AxisFileGroup(r'C:\Cryostat\Cryostat\Data')
+        # '/home/ludoric/Documents/PhD_stuff/GPIB_meter'
         self.axes.axes.Temperature_A = Axis(
                 'Temperature_A', save_column=True, ax_label=True)
         self.axes.axes.Temperature_B = Axis(
@@ -60,9 +61,10 @@ class Meter:
         self.axes.axes.Voltage_Prefix = Axis(
                 'Voltage_Prefix', save_column=True)
         self.axes.axes.Resistance = Axis(
-                'Resistance', save_column='Resistance (From measured values)', ax_label=True)
+                'Resistance', save_column='Resistance (From measured values)',
+                ax_label=True, ax_scale='log')
         self.axes.axes.Resistivity = Axis(
-                'Resistivity', save_column=True, ax_label=True)
+                'Resistivity', save_column=True, ax_label=True, ax_scale='log')
         self.axes.axes.Time = Axis(
                 'Time', save_column='Time (s)', ax_label=True)
 
@@ -98,7 +100,12 @@ class Meter:
         [a.reset() for a in self.axes.axes.values()]
         self.interface.update_axis_fields()
         self.axes.date_start = datetime.today().strftime('%d_%m_%Y')
-        self.axes.openOutputFile()
+        if not self.axes.file_path_prefix:
+            raise ValueError('Please enter a file path prefix')
+        if not self.axes.file_user:
+            raise ValueError('Please enter a user')
+        if not self.axes.file_sample:
+            raise ValueError('Please enter a sample ID')
 
         self.measuring = True
         self.collectD_thread = th.Thread(target=self.collectData)
@@ -180,10 +187,10 @@ class Meter:
                 # we haven't defined some of the variables yet
                 line_finish_time = next_meas_time = time.time()
                 c_dir = 'Neg_'
-                t = time.time()
                 self.axes.lock.acquire()
                 self.axes.start_measurement = True
                 self.axes.lock.release()
+                t = time.time()
             
             c_dir = 'Neg_' if c_dir == 'Pos_' else 'Pos_'
             ax = self.axes
@@ -191,20 +198,24 @@ class Meter:
             input_line = inp.dat[inp.index]
             ndtemp = input_line['T_end']
             # start a new line if necessary
-            if ax.start_measurement or (t >= line_finish_time and (
-                    (not ndtemp) or abs(ndtemp - ax.axes[inp.T_sensor].data[-1]) < inp.T_threshold)):
+            if ax.start_measurement or t >= line_finish_time or 
+                    (ndtemp and abs(ndtemp - ax.axes[inp.T_sensor].data[-1]) < inp.T_threshold):
                 ax.lock.acquire()
                 if not ax.start_measurement:
                     inp.index += 1
                 ax.start_measurement = False
                 ax.lock.release()
+                self.axes.openOutputFile()
                 input_line = inp.dat[inp.index]
                 if any([a!=a for a in input_line.values()]):
                     # we have run out of valid lines in the file
                     self.measuring = False
                     break
                 # there is a lot of stuff that needs to happen here
-                line_finish_time += input_line['time_dwell']
+                if input_line['time_max']:
+                    line_finish_time = t + input_line['time_max']
+                else:
+                    line_finish_time = t + inp.time_giveup
                 if input_line['T_end']:
                     self.devices.temperature.set('ramp', input_line['T_ramp_rate'])
                     self.devices.temperature.set('setp', input_line['T_end'])
@@ -219,12 +230,12 @@ class Meter:
                 td = input_line['time_dwell']
                 te = line_finish_time
                 # calcuate the next current to apply
-                current = c_e if t > te else (t-te+td)/td*(c_e-c_s) + c_s
+                current = c_e if t > te or td == 0 else (t-te+td)/td*(c_e-c_s) + c_s
             else:  # if c_dir == 'Neg_':
                 # the opposite of what it was last time
                 current = -ax.axes.Supply_Current.data[-1]
             self.devices.supply.set('current', current)
-            next_meas_time += input_line['time_datapoint']/2
+            next_meas_time += input_line['time_datapoint']
 
         # tidy up on exit
         self.devices.supply.set('switch', 0)
@@ -237,7 +248,7 @@ class Meter:
     
     def initialiseDevices(self):
         """ Initialise the devices used to read data """
-        self.rm = pyvisa.ResourceManager('@py')  # might need path to lib or '@py'
+        self.rm = pyvisa.ResourceManager()  # might need path to lib or '@py'
         self.devices = DotDict({})
         self.devices.supply = SimpleDevice(
                 self.rm, 'GPIB::16::INSTR', # it says 9 on the box?
@@ -270,7 +281,8 @@ class Meter:
                 )
         self.devices.temperature = SimpleDevice(
                 self.rm, 'GPIB::12::INSTR',
-                config=('CSET 1, B, 1, 1', 'CLIMIT 1, 301.0, 11, 0, 4, 4', 'RANGE 5'),  # '*RST'
+                config=('*RST', 'CSET 1, B, 1, 1', 'CDISP 1, 1, 28, 1', # change to actual resistance
+                        'CLIMIT 1, 301.0, 11, 0, 4, 5', 'RANGE 5'),  # '*RST'
                 read=('KRDG? A' ,'KRDG? B'),
                 cast=lambda x: (float(x[0]), float(x[1])),
                 titles=('Temperature_A', 'Temperature_B'),

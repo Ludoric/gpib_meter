@@ -1,4 +1,4 @@
-#GPIBM_I {"T_sensor": "Temperature_B", "T_threshold": 0.1}
-I_start	I_end	T_end	T_ramp_rate	time_dwell	V_limit	time_datapoint
+#GPIBM_I {"T_sensor": "Temperature_B", "T_threshold": 0.1, "time_giveup": 1800}
+I_start	I_end	T_end	T_ramp_rate	time_max	V_limit	time_datapoint
 NaN	NaN	NaN	NaN	NaN	NaN	NaN
 

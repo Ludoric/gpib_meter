@@ -215,7 +215,7 @@ class Interface:
             try:
                 self.startMeasurement()
             except Exception as e:
-                tk.messagebox.showerror('Failed to start measurement', 'Failed to start measurement')
+                tk.messagebox.showerror('Failed to start measurement', e)
                 printE(e)
                 traceback.print_exc()
                 return
@@ -231,13 +231,14 @@ class Interface:
         self.axes.updated = False
         x = self.axes.axes[self.xaxis_is.get()]
         y = self.axes.axes[self.yaxis_is.get()]
+        l = min(len(x), len(y))
         ax = self.plot.ax1
         ax.clear()
         ax.set_xlabel(x.ax_label)
         ax.set_xscale(x.ax_scale)
         ax.set_ylabel(y.ax_label)
         ax.set_yscale(y.ax_scale)
-        ax.plot(x.data, y.data)
+        ax.plot(x.data[:l], y.data[:l])
         # self.axes.lock.release()
         self.plot.canvas.draw()
 
