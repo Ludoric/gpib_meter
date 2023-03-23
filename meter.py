@@ -1,4 +1,3 @@
-from datetime import datetime
 from pathlib import Path
 import threading as th
 import tkinter as tk
@@ -142,7 +141,7 @@ class Meter:
         self.axes.start_measurement = True
         while self.running and self.measuring:
             try:
-                time.sleep(min(1, next_meas_time-time.time()))
+                time.sleep(min(1, abs(next_meas_time-time.time())))
                 t = time.time()
                 if t < next_meas_time:
                     continue
@@ -172,12 +171,9 @@ class Meter:
                     # dat['rho'] = dat['R']/R_meas  # to normalise things correctly
                     # dat['rho'] *= np.pi*thickness*1e-9/np.log(2) * (R_meas+R_notmeas)/2 * factor
                 self.axes.updated = True
-                self.lock.release()
+                self.axes.lock.release()
                 
-                # open the next file etc.
             except NameError as e: # the try except should be faster than an if here
-                if self.axes.lock.locked():
-                    self.axes.lock.release()
                 # traceback.print_exc()
                 # we haven't defined some of the variables yet
                 line_finish_time = next_meas_time = time.time()
@@ -221,6 +217,8 @@ class Meter:
 
                 self.devices.supply.set('voltage', input_line['V_limit'])
                 self.devices.supply.set('switch', 1)
+            else:
+                ax.lock.release()
             
             # we just need to continue measureing for a bit longer
             if c_dir == 'Pos_':

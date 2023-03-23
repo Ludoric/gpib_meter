@@ -120,7 +120,7 @@ class Interface:
         self.yaxis_label = tk.Label(self.plot.toolbar, text='Y axis:')
         self.yaxis_label.pack(side=tk.LEFT)
         self.yaxis_is = tk.StringVar(self.plot.toolbar)
-        self.yaxis_is.set('Pos_Voltage')  # 'Resistance'
+        self.yaxis_is.set('Resistance')
         self.yaxis_options = tk.OptionMenu(
                 self.plot.toolbar, self.yaxis_is, *self.axes.axes.keys(),
                 command=lambda x, s=self: s.updatePlot(force=True))

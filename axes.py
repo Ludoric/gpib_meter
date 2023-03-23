@@ -1,6 +1,6 @@
 import threading as th
 from pathlib import Path
-import datetime
+from datetime import datetime
 import json
 
 from utility import DotDict, tofloat
@@ -73,7 +73,7 @@ class Input:
         with open(fname, 'w') as f:
             f.write('#GPIBM_I '+json.dumps(self.magicNumber)+'\n')
             f.write('\t'.join(self.dat[0].keys())+'\n')
-            for i, l in enumerate(self.input.dat):
+            for i, l in enumerate(self.dat):
                 if float('nan') in (vs:=l.values()) and i > 0:
                     break
                 f.write('\t'.join(map(str, vs))+'\n') 
