@@ -1,5 +1,6 @@
 import threading as th
 from pathlib import Path
+import datetime
 import json
 
 from utility import DotDict, tofloat
@@ -21,40 +22,25 @@ class Axis:
     def reset(self):
         self.data.clear()
 
+class Input:
+    def __init__(self):
+        self.fname = None
+        self.dat = None
+        self.index = 0
 
-class AxisFileGroup:
-    def __init__(self, file_path_prefix):
-        self.lock = th.Lock()
-
-        self.current_out_file = None
-        self.file_counter = 0
-        self.file_path_prefix = file_path_prefix
-        self.file_user = ''
-        self.file_sample = ''
-        self.updated = False
-        self.start_measurement = True
-
-        self.axes = DotDict({})
-
-        self.input = DotDict({})
-        self.input.fname = None
-        self.input.dat = None
-        self.input.index = 1
-        self.input.T_sensor = None  # from input file
-        self.input.T_threshold = None  # from input file
-
-
-        self.sample_thickness = None  # nm
-        self.sample_other_resistance = None  # Ω
-
+        self.magicNumber = {}
+        # only here so you know what to expect
+        # (not enforeced, but will crash if missing)
+        self.magicNumber['T_sensor'] = None  # from input file
+        self.magicNumber['T_threshold'] = None  # from input file
+        self.magicNumber['time_giveup'] = None  # from input file
 
     def tryAddRowToTable(self):
-        if not self.input.dat:
+        if not self.dat:
             return
-        if all([a!=a for a in self.input.dat[-1].values()]):
+        if all([a!=a for a in self.dat[-1].values()]):
             return
-        self.input.dat.append(dict((k, float('nan'))
-                                   for k in self.input.dat[0]))
+        self.dat.append(dict((k, float('nan')) for k in self.dat[0]))
         return True
 
     def openInputFile(self, fname):
@@ -76,24 +62,55 @@ class AxisFileGroup:
                 # rows.append(row)
                 rows.append(dict(zip(cols,row)))
             # dat = dict(zip(cols, [list(a) for a in zip(*rows)]))
-        self.input.clear()
-        self.input.dat = rows
-        self.input.update(dic)
-        self.input.index = 1
-        self.input.fname = fname
+        self.magicNumber.clear()
+        self.magicNumber.update(dic)
+        self.dat = rows
+        self.index = 1
+        self.fname = fname
         self.tryAddRowToTable()
 
     def writeInputFile(self, fname):
         with open(fname, 'w') as f:
-            f.write('#GPIBM_I '+f'{{"T_sensor": "{self.input.T_sensor}", '+
-                     f'"T_threshold": {self.input.T_threshold} }}\n')
-            f.write('\t'.join(self.input.dat[0].keys())+'\n')
+            f.write('#GPIBM_I '+json.dumps(self.magicNumber)+'\n')
+            f.write('\t'.join(self.dat[0].keys())+'\n')
             for i, l in enumerate(self.input.dat):
                 if float('nan') in (vs:=l.values()) and i > 0:
                     break
                 f.write('\t'.join(map(str, vs))+'\n') 
         self.input_fname = fname
 
+
+class AxisFileGroup:
+    def __init__(self, file_path_prefix):
+        self.lock = th.Lock()
+
+        self.current_out_file = None
+        self.file_counter = 0
+        self.file_path_prefix = file_path_prefix
+        self.file_user = ''
+        self.file_sample = ''
+        self.updated = False # used to check when to update the plot
+        self.start_measurement = True # used to request a new output file
+
+        self.axes = DotDict({})
+
+        self.input = Input()
+
+        # unused: (to delete?)
+        self.sample_thickness = None  # nm
+        self.sample_other_resistance = None  # Ω
+
+    def prepareForMeasurement(self):
+        self.date_start = datetime.today().strftime('%d_%m_%Y')
+        [a.reset() for a in self.axes.values()]
+        if not self.file_path_prefix:
+            raise ValueError('Please enter a file path prefix')
+        if not self.file_user:
+            raise ValueError('Please enter a user')
+        if not self.file_sample:
+            raise ValueError('Please enter a sample ID')
+        self.file_counter = 0
+        self.openOutputFile()
         
     def closeOutputFile(self):
         if (f := self.current_out_file):
@@ -104,6 +121,7 @@ class AxisFileGroup:
         
     def openOutputFile(self):
         self.closeOutputFile()
+        self.file_counter += 1
         path = (Path(self.file_path_prefix) / self.file_user /
                 self.file_sample /
                 f'{self.file_sample}-{self.date_start}_{self.file_counter:2d}.txt'
@@ -112,16 +130,17 @@ class AxisFileGroup:
         self.current_out_file = open(path, 'a')
         # write column headers
         self.current_out_file.write('\t'.join([
-            f"'{ax.save_column}'" for ax in self.axes.values() if ax.save_column
+            f"'{ax.save_column}'"
+            for ax in self.axes.values() if ax.save_column
             ])+'\n')
 
     
     def writeOutputLine(self):
         if not self.current_out_file:
             self.openOutputFile()
-
         self.current_out_file.write('\t'.join([
-            str(ax.data[-1] if len(ax.data)>=1 else None) for ax in self.axes.values() if ax.save_column
+            str(ax.data[-1] if len(ax.data)>=1 else None)
+            for ax in self.axes.values() if ax.save_column
             ])+'\n')
 
 

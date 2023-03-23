@@ -87,6 +87,7 @@ class Interface:
         self.t_c.tab_c.create_window((4,4), window=self.t_c.tab_f, anchor="nw")
         self.t_c.tab_f.bind("<Configure>", lambda event, c=self.t_c.tab_c:
                             c.configure(scrollregion=c.bbox("all")))
+        self.t_c.index_var = tk.IntVar()
 
 
         self.fields.load_input = ttk.Button(
@@ -143,22 +144,30 @@ class Interface:
 
         self.updatePlot(force=True)
 
+
+    def changeInputLine(self):
+        self.axes.lock.acquire()
+        self.axes.input.index = self.t_c.index_var.get()
+        self.axes.start_measurement = True
+        self.axes.lock.release()
+
+
     def saveInputFile(self, file=None):
         file = file or tk.filedialog.asksaveasfilename()
         try:
-            self.axes.writeInputFile(file)
+            self.axes.input.writeInputFile(file)
         except Exception as e:
             tk.messagebox.showerror('Failed to write input file', 'Failed to write input file')
             printE(e)
             traceback.print_exc()
             return
-        self.fields.input_fname.config(text=self.axes.input_fname)
+        self.fields.input_fname.config(text=self.axes.input.fname)
 
 
     def loadInputFile(self, file=None):
         file = file or tk.filedialog.askopenfilename()
         try:
-            self.axes.openInputFile(file)
+            self.axes.input.openInputFile(file)
         except Exception as e:
             tk.messagebox.showerror('Failed to read input file', 'Failed to read input file')
             printE(e)
@@ -174,10 +183,13 @@ class Interface:
         self.t_c.table = (t:=[])  # a list of dicts
         for i_r, row in enumerate(self.axes.input.dat, start=1):
             t.append((ti:={}))
+            tk.Radiobutton(
+                    f, variable=self.t_c.index_var, value=i_r-1,
+                    command=lambda s=self: s.changeInputLine()
+                    ).grid(row=i_r, column=0)
             for i_c, (title, v) in enumerate(row.items(), start=1):
                 if i_r == 1:
-                    b = tk.Label(f, text=title)
-                    b.grid(row=0, column=i_c)
+                    tk.Label(f, text=title).grid(row=0, column=i_c)
                 b = tk.Entry(f)
                 b.insert(0, v)
                 b.grid(row=i_r, column=i_c)
@@ -200,9 +212,11 @@ class Interface:
     def update(self):
         self.update_axis_fields()
         self.updatePlot()
-        if self.axes.tryAddRowToTable():
+        if self.axes.input.tryAddRowToTable():
             self.drawInputFile()
-        # TODO: update the little arrowing pointing the the line of the input file we are on
+        self.axes.lock.acquire()
+        self.t_c.index_var.set(self.axes.input.index)
+        self.axes.lock.release()
 
 
     def measurement_toggle(self):
@@ -231,13 +245,13 @@ class Interface:
         self.axes.updated = False
         x = self.axes.axes[self.xaxis_is.get()]
         y = self.axes.axes[self.yaxis_is.get()]
-        l = min(len(x), len(y))
         ax = self.plot.ax1
         ax.clear()
         ax.set_xlabel(x.ax_label)
         ax.set_xscale(x.ax_scale)
         ax.set_ylabel(y.ax_label)
         ax.set_yscale(y.ax_scale)
+        l = min(len(x.data), len(y.data))
         ax.plot(x.data[:l], y.data[:l])
         # self.axes.lock.release()
         self.plot.canvas.draw()

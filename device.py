@@ -45,8 +45,8 @@ class SimpleDevice:
 
 
     def set(self, toSet, val=None):
-        if val:
-            self.device.write(self._setthing[toSet].format(val))
-        else:
+        if val is None:
             self.device.write(self._setthing[toSet])
+        else:
+            self.device.write(self._setthing[toSet].format(val))
 

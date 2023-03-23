@@ -97,15 +97,8 @@ class Meter:
         # print([f'{x[0]}={x[1]}' for d in self.devices.items()
         #        for x in zip(d.titles, d.read())].join(', '))
 
-        [a.reset() for a in self.axes.axes.values()]
         self.interface.update_axis_fields()
-        self.axes.date_start = datetime.today().strftime('%d_%m_%Y')
-        if not self.axes.file_path_prefix:
-            raise ValueError('Please enter a file path prefix')
-        if not self.axes.file_user:
-            raise ValueError('Please enter a user')
-        if not self.axes.file_sample:
-            raise ValueError('Please enter a sample ID')
+        self.axes.prepareForMeasurement()
 
         self.measuring = True
         self.collectD_thread = th.Thread(target=self.collectData)
@@ -179,43 +172,49 @@ class Meter:
                     # dat['rho'] = dat['R']/R_meas  # to normalise things correctly
                     # dat['rho'] *= np.pi*thickness*1e-9/np.log(2) * (R_meas+R_notmeas)/2 * factor
                 self.axes.updated = True
-                self.axes.lock.release()
+                self.lock.release()
                 
                 # open the next file etc.
             except NameError as e: # the try except should be faster than an if here
+                if self.axes.lock.locked():
+                    self.axes.lock.release()
                 # traceback.print_exc()
                 # we haven't defined some of the variables yet
                 line_finish_time = next_meas_time = time.time()
                 c_dir = 'Neg_'
-                self.axes.lock.acquire()
                 self.axes.start_measurement = True
-                self.axes.lock.release()
                 t = time.time()
             
+            # the lock is acquired for all of this block
+            self.axes.lock.acquire()
             c_dir = 'Neg_' if c_dir == 'Pos_' else 'Pos_'
             ax = self.axes
             inp = ax.input
             input_line = inp.dat[inp.index]
             ndtemp = input_line['T_end']
-            # start a new line if necessary
-            if ax.start_measurement or t >= line_finish_time or 
-                    (ndtemp and abs(ndtemp - ax.axes[inp.T_sensor].data[-1]) < inp.T_threshold):
-                ax.lock.acquire()
+            mNum = inp.magicNumber
+
+            if (ax.start_measurement or t >= line_finish_time or (
+                    ndtemp and abs(ndtemp - ax.axes[mNum[
+                        'T_sensor']].data[-1]) < mNum['T_threshold'])):
                 if not ax.start_measurement:
                     inp.index += 1
                 ax.start_measurement = False
-                ax.lock.release()
                 self.axes.openOutputFile()
                 input_line = inp.dat[inp.index]
                 if any([a!=a for a in input_line.values()]):
                     # we have run out of valid lines in the file
                     self.measuring = False
+                    ax.lock.release()
                     break
+                ax.lock.release()
+                # and now we unlock it; nothing after this should effect things
+
                 # there is a lot of stuff that needs to happen here
                 if input_line['time_max']:
                     line_finish_time = t + input_line['time_max']
                 else:
-                    line_finish_time = t + inp.time_giveup
+                    line_finish_time = t + mNum['time_giveup']
                 if input_line['T_end']:
                     self.devices.temperature.set('ramp', input_line['T_ramp_rate'])
                     self.devices.temperature.set('setp', input_line['T_end'])
@@ -227,7 +226,7 @@ class Meter:
             if c_dir == 'Pos_':
                 c_s = input_line['I_start']
                 c_e = input_line['I_end']
-                td = input_line['time_dwell']
+                td = input_line['time_max']
                 te = line_finish_time
                 # calcuate the next current to apply
                 current = c_e if t > te or td == 0 else (t-te+td)/td*(c_e-c_s) + c_s
@@ -239,7 +238,6 @@ class Meter:
 
         # tidy up on exit
         self.devices.supply.set('switch', 0)
-        self.devices.temperature.set('reset')
 
     def stopApplication(self):
         self.running = False
@@ -281,7 +279,7 @@ class Meter:
                 )
         self.devices.temperature = SimpleDevice(
                 self.rm, 'GPIB::12::INSTR',
-                config=('*RST', 'CSET 1, B, 1, 1', 'CDISP 1, 1, 28, 1', # change to actual resistance
+                config=('*RST', 'CSET 1, B, 1, 1', 'CDISP 1, 1, 25, 1', # change to actual resistance
                         'CLIMIT 1, 301.0, 11, 0, 4, 5', 'RANGE 5'),  # '*RST'
                 read=('KRDG? A' ,'KRDG? B'),
                 cast=lambda x: (float(x[0]), float(x[1])),
