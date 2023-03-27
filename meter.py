@@ -206,7 +206,7 @@ class Meter:
                 ax.lock.release()
                 # and now we unlock it; nothing after this should effect things
 
-                # there is a lot of stuff that needs to happen here
+                # we stop measureing when either time_max is up, or we reach temperature
                 if input_line['time_max']:
                     line_finish_time = t + input_line['time_max']
                 else:
@@ -214,6 +214,9 @@ class Meter:
                 if input_line['T_end']:
                     self.devices.temperature.set('ramp', input_line['T_ramp_rate'])
                     self.devices.temperature.set('setp', input_line['T_end'])
+                if not (input_line['time_max'] or input_line['T_end']):
+                    # case for both time and temp = 0
+                    line_finish_time = t
 
                 self.devices.supply.set('voltage', input_line['V_limit'])
                 self.devices.supply.set('switch', 1)
