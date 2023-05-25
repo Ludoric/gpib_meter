@@ -2,7 +2,6 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 from matplotlib import figure
 from tkinter import ttk
 import tkinter as tk
-import pandas as pd
 import traceback
 import code  # for debugging
 # import numpy as np
@@ -79,15 +78,15 @@ class Interface:
                 self.t_controls, orient='horizontal', command=self.t_c.tab_c.xview)
         self.t_c.tab_c.configure(yscrollcommand=self.t_c.vsb.set, xscrollcommand=self.t_c.hsb.set)
         
-        self.t_c.tab_c.grid(row=0, column=3, columnspan=3, rowspan=7, sticky="nsew")
-        self.t_c.vsb.grid(row=0, column=6, rowspan=7, sticky="ns")
-        self.t_c.hsb.grid(row=7, column=3, columnspan=3, sticky="ew")
+        self.t_c.tab_c.grid(row=0, column=3, columnspan=5, rowspan=7, sticky="nsew")
+        self.t_c.vsb.grid(row=0, column=8, rowspan=7, sticky="ns")
+        self.t_c.hsb.grid(row=7, column=3, columnspan=5, sticky="ew")
         self.t_controls.grid_rowconfigure(6, weight=1)
         self.t_controls.grid_columnconfigure(5, weight=1)
         self.t_c.tab_c.create_window((4,4), window=self.t_c.tab_f, anchor="nw")
         self.t_c.tab_f.bind("<Configure>", lambda event, c=self.t_c.tab_c:
                             c.configure(scrollregion=c.bbox("all")))
-        self.t_c.index_var = tk.IntVar()
+        self.t_c.index_var = tk.IntVar(value=0)
 
 
         self.fields.load_input = ttk.Button(
@@ -100,6 +99,14 @@ class Interface:
         self.fields.save_input.grid(row=8, column=4)
         self.fields.input_fname = tk.Label(self.t_controls, text='')
         self.fields.input_fname.grid(row=8, column=5)
+        self.fields.row_after =  ttk.Button(
+                self.t_controls, text='Add Row',
+                command=self.addInputLine)
+        self.fields.row_after.grid(row=8, column=6)
+        self.fields.row_delete =  ttk.Button(
+                self.t_controls, text='Delete Row',
+                command=self.removeInputLine)
+        self.fields.row_delete.grid(row=8, column=7)
 
 
         # TODO: possibly make time : temperature / current prediction?
@@ -109,7 +116,7 @@ class Interface:
         # we have to use pack here, since it's what matplotlib likes
         self.plot = DotDict({})
         self.plot.fig = figure.Figure(
-                constrained_layout=True, figsize=(840/96, 480/96), dpi=96)
+                constrained_layout=True, figsize=(1280/96, 540/96), dpi=96)
         self.plot.ax1 = self.plot.fig.add_subplot(1, 1, 1)
         self.plot.canvas = FigureCanvasTkAgg(self.plot.fig, self.t_plot)
         self.plot.canvas.draw()
@@ -148,9 +155,16 @@ class Interface:
     def changeInputLine(self):
         self.axes.lock.acquire()
         self.axes.input.index = self.t_c.index_var.get()
-        self.axes.start_measurement = True
+        self.axes.force_next_input_line = True
         self.axes.lock.release()
 
+    def addInputLine(self):
+        self.axes.input.addRowToTable()
+        self.drawInputFile()
+
+    def removeInputLine(self):
+        self.axes.input.removeRowFromTable()
+        self.drawInputFile()
 
     def saveInputFile(self, file=None):
         file = file or tk.filedialog.asksaveasfilename()
@@ -194,6 +208,7 @@ class Interface:
                 b.insert(0, v)
                 b.grid(row=i_r, column=i_c)
                 ti[title] = b
+        self.t_c.index_var.set(self.axes.input.index)
         # self.t_c.tab_c.update()
 
 
@@ -203,7 +218,6 @@ class Interface:
         self.axes.file_sample = self.fields.file_sample.get()
         # self.axes.sample_thickness = self.fields.sample_thickness.get()
         # self.axes.sample_other_resistance = self.fields.sample_other_res.get()
-
         for t_r, a_r in zip(self.t_c.table, self.axes.input.dat):  # syncronise the two tables
             for k, v in t_r.items():
                 a_r[k] = tofloat(v.get())
@@ -212,8 +226,6 @@ class Interface:
     def update(self):
         self.update_axis_fields()
         self.updatePlot()
-        if self.axes.input.tryAddRowToTable():
-            self.drawInputFile()
         self.axes.lock.acquire()
         self.t_c.index_var.set(self.axes.input.index)
         self.axes.lock.release()

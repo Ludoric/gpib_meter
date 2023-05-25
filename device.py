@@ -20,7 +20,7 @@ class SimpleDevice:
         set = dict of (lowercase) name to set, 
     """
     def __init__(self, resourceManager, resourceID, *, config,
-                 read, cast, titles, setthing={None: ''}):
+                 read, cast, titles, setthing={None: ''}, close=None):
         """
             titles, device, read, set are the only methods and fields that
             should be visible
@@ -32,6 +32,7 @@ class SimpleDevice:
         self._cast = cast
         self.titles = titles
         self._setthing = setthing
+        self._closeStrings = close
         self.device = self._rm.open_resource(self._rID)
         [self.device.write(c) for c in self._config]
 
@@ -49,4 +50,8 @@ class SimpleDevice:
             self.device.write(self._setthing[toSet])
         else:
             self.device.write(self._setthing[toSet].format(val))
+
+    def close():
+        if self._closeStrings:
+            [self.device.write(c) for c in self._closeStrings]
 

@@ -35,12 +35,22 @@ class Input:
         self.magicNumber['T_threshold'] = None  # from input file
         self.magicNumber['time_giveup'] = None  # from input file
 
-    def tryAddRowToTable(self):
+    def addRowToTable(self):
         if not self.dat:
             return
-        if all([a!=a for a in self.dat[-1].values()]):
+        nl = self.dat[self.index].copy() if self.index >= 0 else (
+                dict((k, float('nan')) for k in self.dat[0]))
+        self.dat.insert(self.index, nl)
+        return True
+    
+    def removeRowFromTable(self):
+        if not self.dat:
             return
-        self.dat.append(dict((k, float('nan')) for k in self.dat[0]))
+        if self.index >= len(self.dat):
+            return
+        del self.dat[self.index]
+        if self.index == len(self.dat):
+            self.index -= 1
         return True
 
     def openInputFile(self, fname):
@@ -65,17 +75,16 @@ class Input:
         self.magicNumber.clear()
         self.magicNumber.update(dic)
         self.dat = rows
-        self.index = 1
+        self.index = 0
         self.fname = fname
-        self.tryAddRowToTable()
 
     def writeInputFile(self, fname):
         with open(fname, 'w') as f:
             f.write('#GPIBM_I '+json.dumps(self.magicNumber)+'\n')
             f.write('\t'.join(self.dat[0].keys())+'\n')
             for i, l in enumerate(self.dat):
-                if float('nan') in (vs:=l.values()) and i > 0:
-                    break
+#                 if float('nan') in (vs:=l.values()) and i > 0:
+#                     break
                 f.write('\t'.join(map(str, vs))+'\n') 
         self.input_fname = fname
 
@@ -90,7 +99,7 @@ class AxisFileGroup:
         self.file_user = ''
         self.file_sample = ''
         self.updated = False # used to check when to update the plot
-        self.start_measurement = True # used to request a new output file
+        self.force_next_input_line = True # used to request a new output file
 
         self.axes = DotDict({})
 
