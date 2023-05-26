@@ -1,11 +1,11 @@
 conda activate FORpyVISA
 
 import pyvisa
-rm = pyvisa.ResourceManager('@py')
+rm = pyvisa.ResourceManager()  # '@py'
 print(rm.list_resources())
-
-print(tek.query("*IDN?"))
 tek = rm.open_resource('GPIB::14')
+print(tek.query("*IDN?"))
+
 tek.write('*rst; status:preset; *cls')
 tek.write('CONFIGURE:CURRENT:DC')  #  there's more to configure here
 

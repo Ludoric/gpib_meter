@@ -1,4 +1,4 @@
-import threading as th
+﻿import threading as th
 from pathlib import Path
 from datetime import datetime
 import json
@@ -85,7 +85,7 @@ class Input:
             for i, l in enumerate(self.dat):
 #                 if float('nan') in (vs:=l.values()) and i > 0:
 #                     break
-                f.write('\t'.join(map(str, vs))+'\n') 
+                f.write('\t'.join(map(str, l.values()))+'\n') 
         self.input_fname = fname
 
 
@@ -118,6 +118,8 @@ class AxisFileGroup:
             raise ValueError('Please enter a user')
         if not self.file_sample:
             raise ValueError('Please enter a sample ID')
+        if  0 > self.input.index or self.input.index >= len(self.input.dat):
+            raise ValueError('Invalid starting line: Please select a starting line')
         self.file_counter = 0
         self.openOutputFile()
         

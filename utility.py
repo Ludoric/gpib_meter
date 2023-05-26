@@ -24,6 +24,9 @@ def tofloat(x):
     except ValueError:
         return float('nan')
 
+def ifnan(x, default):
+    return default if x != x else x
+
 def calcStructureFactor(r):
     """
     r = Resistance ratio = R_{AB,CD} / R_{BC,DA}

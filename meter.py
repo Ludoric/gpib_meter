@@ -9,7 +9,7 @@ import sys
 
 from interface import Interface
 from device import SimpleDevice
-from utility import DotDict, printE
+from utility import DotDict, printE, ifnan
 from axes import AxisFileGroup, Axis
 
 
@@ -211,8 +211,7 @@ class Meter:
                     # and now we unlock it; nothing after this should effect things
 
                     # we stop measureing when either time_max is up, or we reach temperature
-                    line_finish_time = t + (
-                            input_line['time_max'] or mNum['time_giveup'])
+                    line_finish_time = t + ifnan(input_line['time_max'], mNum['time_giveup'])
                     if not (input_line['T_end'] != input_line['T_end']):
                         self.devices.temperature.set('ramp', input_line['T_ramp_rate'])
                         self.devices.temperature.set('setp', input_line['T_end'])
@@ -228,8 +227,8 @@ class Meter:
                 # we just need to continue measureing for a bit longer
                 if c_dir == 'Pos_':
                     c_s = input_line['I_start']
-                    c_e = input_line['I_end'] or c_s
-                    td = input_line['time_max'] or 0.0
+                    c_e = ifnan(input_line['I_end'], c_s)
+                    td = ifnan(input_line['time_max'], 0.0)
                     te = line_finish_time
                     # calcuate the next current to apply
                     current = c_e if t > te or td == 0 else (t-te+td)/td*(c_e-c_s) + c_s
@@ -244,6 +243,7 @@ class Meter:
 
         # tidy up on exit
         [d.close() for d in self.devices.values()]
+        self.axes.input.index = 0
 
     def stopApplication(self):
         self.running = False
@@ -267,19 +267,19 @@ class Meter:
                           'switch': 'F{:1d}X'},
                 close=('F0X',)
                 )
-        self.devices.amps = SimpleDevice(  # to make Jackson happy
-                self.rm, 'GPIB::14::INSTR',
-                config=['*', 'F5'],
-                read=('?',), cast=(lambda x: (float(x[0]),)), titles=('Current',),
-                )
-        # self.devices.amps = SimpleDevice(
+        # self.devices.amps = SimpleDevice(  # to make Jackson happy
         #         self.rm, 'GPIB::14::INSTR',
-        #         config=['*rst; status:preset; *cls', 'CONFIGURE:CURRENT:DC'],
-        #         read=('READ?',), cast=(lambda x: (float(x[0]),)), titles=('Current',),
+        #         config=('F5',),
+        #         read=('?',), cast=(lambda x: (float(x[0]),)), titles=('Current',),
         #         )
+        self.devices.amps = SimpleDevice(
+                self.rm, 'GPIB::14::INSTR',
+                config=['*rst; status:preset; *cls', 'CONFIGURE:CURRENT:DC'],
+                read=('READ?',), cast=(lambda x: (float(x[0]),)), titles=('Current',),
+                )
         self.devices.volts = SimpleDevice(
                 self.rm, 'GPIB::7::INSTR',
-                config=['G1 B1 N1 O1 P2 S2 X'],
+                config=['G1 B1 N1 O1 P0 S2S X'],
                 # prefix on result, 6 1/2 digit display, Filters ON,
                 # Analogue Filter ON, Digital filter high response, 100ms integration,
                 # execute commands
@@ -288,7 +288,7 @@ class Meter:
                     x[0][0], a if abs(a:=float(x[0][4:]))<1e90 else a*float('inf')),
                 titles=('Voltage_Prefix', 'Voltage'),
                 setthing={'screen': "A1,'{}'X", 'screen_reset': 'AOX'},
-                close=('S0X',)
+                close=('S0 X',)
                 )
         self.devices.temperature = SimpleDevice(
                 self.rm, 'GPIB::12::INSTR',

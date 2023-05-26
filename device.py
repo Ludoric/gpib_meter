@@ -51,7 +51,7 @@ class SimpleDevice:
         else:
             self.device.write(self._setthing[toSet].format(val))
 
-    def close():
+    def close(self):
         if self._closeStrings:
             [self.device.write(c) for c in self._closeStrings]
 
